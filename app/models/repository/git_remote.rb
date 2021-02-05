@@ -8,7 +8,7 @@ class Repository::GitRemote < Repository::Git
 
   before_validation :initialize_clone
 
-  safe_attributes 'extra_info', :if => lambda {|repository, _user| repository.new_record?}
+  safe_attributes 'extra_info', :if => lambda { |repository, _user| repository.new_record? }
 
   # TODO: figure out how to do this safely (if at all)
   # before_deletion :rm_removed_repo
@@ -23,8 +23,17 @@ class Repository::GitRemote < Repository::Git
     extra_info["extra_clone_url"]
   end
 
+  def extra_clone_token
+    return nil unless extra_info
+    extra_info["extra_clone_token"]
+  end
+
   def clone_url
     self.extra_clone_url
+  end
+
+  def clone_token
+    self.extra_clone_token
   end
 
   def clone_path
@@ -89,19 +98,40 @@ class Repository::GitRemote < Repository::Git
   end
 
   # equality check ignoring trailing whitespace and slashes
-  def two_remotes_equal(a,b)
-    a.chomp.gsub(/\/$/,'') == b.chomp.gsub(/\/$/,'')
+  def two_remotes_equal(a, b)
+    a.chomp.gsub(/\/$/, '') == b.chomp.gsub(/\/$/, '')
   end
 
   def ensure_possibly_empty_clone_exists
-    Repository::GitRemote.add_known_host(clone_host) if clone_protocol_ssh?
+    usable_clone_url = ""
+    if clone_protocol_ssh?
+      Repository::GitRemote.add_known_host(clone_host)
+      usable_clone_url = clone_url
+    else
+      puts "Url is not ssh"
+      if clone_url.starts_with?("http://")
+        puts "Url is http"
+        usable_clone_url = clone_url.sub("http://", "http://gitlab-ci-token:#{extra_clone_token}@")
+      else
+        if clone_url.starts_with?("https://")
+          puts "Url is https"
+          usable_clone_url = clone_url.sub("https://", "https://gitlab-ci-token:#{extra_clone_token}@")
+        end
+      end
+    end
+    puts "Usable url is #{usable_clone_url}"
 
-    unless system "git", "ls-remote",  "-h",  clone_url
+    unless system "git", "ls-remote", "-h", usable_clone_url
       return "#{clone_url} is not a valid remote."
     end
 
+    puts "Clone path #{clone_path}"
     if Dir.exists? clone_path
-      existing_repo_remote, status = RedmineGitRemote::PoorMansCapture3::capture2("git", "--git-dir", clone_path, "config", "--get", "remote.origin.url")
+      if clone_protocol_ssh?
+        existing_repo_remote, status = RedmineGitRemote::PoorMansCapture3::capture2("git", "--git-dir", clone_path, "config", "--get", "remote.origin.url")
+      else
+        existing_repo_remote, status = RedmineGitRemote::PoorMansCapture3::capture2("git", "--git-dir", clone_path, "clone", usable_clone_url)
+      end
       return "Unable to run: git --git-dir #{clone_path} config --get remote.origin.url" unless status.success?
 
       unless two_remotes_equal(existing_repo_remote, clone_url)
@@ -109,16 +139,17 @@ class Repository::GitRemote < Repository::Git
       end
     else
       unless system "git", "init", "--bare", clone_path
-        return  "Unable to run: git init --bare #{clone_path}"
+        return "Unable to run: git init --bare #{clone_path}"
       end
 
-      unless system "git", "--git-dir", clone_path, "remote", "add", "--mirror=fetch", "origin",  clone_url
-        return  "Unable to run: git --git-dir #{clone_path} remote add --mirror=fetch origin #{clone_url}"
+      unless system "git", "--git-dir", clone_path, "remote", "add", "--mirror=fetch", "origin", usable_clone_url
+        return "Unable to run: git --git-dir #{clone_path} remote add --mirror=fetch origin #{usable_clone_url}"
       end
     end
   end
 
   unloadable
+
   def self.scm_name
     'GitRemote'
   end
@@ -134,13 +165,13 @@ class Repository::GitRemote < Repository::Git
     # NB: Starting lines with ".gsub" is a syntax error in ruby 1.8.
     #     See http://stackoverflow.com/q/12906048/9621
     # path is github.com/evolvingweb/muhc-ci
-    ret[:path] = url.gsub(/^.*:\/\//, '').   # Remove anything before ://
-                     gsub(/:/, '/').         # convert ":" to "/"
-                     gsub(/^.*@/, '').       # Remove anything before @
-                     gsub(/\.git$/, '')      # Remove trailing .git
+    ret[:path] = url.gsub(/^.*:\/\//, '').# Remove anything before ://
+    gsub(/:/, '/').# convert ":" to "/"
+    gsub(/^.*@/, '').# Remove anything before @
+    gsub(/\.git$/, '') # Remove trailing .git
     ret[:host] = ret[:path].split('/').first
     #TODO: handle project uniqueness automatically or prompt
-    ret[:identifier] =   ret[:path].split('/').last.downcase.gsub(/[^a-z0-9_-]/,'-')
+    ret[:identifier] = ret[:path].split('/').last.downcase.gsub(/[^a-z0-9_-]/, '-')
     return ret
   end
 
@@ -175,7 +206,7 @@ class Repository::GitRemote < Repository::Git
       puts "Adding #{host} to #{ssh_known_hosts}"
       out, status = RedmineGitRemote::PoorMansCapture3::capture2("ssh-keyscan", host)
       raise "Unable to run 'ssh-keyscan #{host}'" unless status
-      Kernel::open(ssh_known_hosts, 'a') { |f| f.puts out}
+      Kernel::open(ssh_known_hosts, 'a') { |f| f.puts out }
     end
   end
 end

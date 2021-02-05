@@ -3,6 +3,9 @@ redmine_git_remote
 
 Redmine plugin to automatically clone and remote git repositories.
 
+A fork from https://github.com/dergachev/redmine_git_remote. This version allows it to define Gitlab repositories by
+using access tokens for authentication.
+
 ## Installation
 
 Install the plugin as usual:
@@ -22,8 +25,6 @@ The plugin shells out to the following binaries, so make sure they're available:
 * ssh-keygen
 
 ## Supporting private repos
-
-For security sake, we don't support cloning over HTTPS with username password, but only via SSH.
 
 For example:
 
