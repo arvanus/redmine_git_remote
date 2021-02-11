@@ -5,10 +5,10 @@ Redmine::Scm::Base.add "GitRemote"
 
 Redmine::Plugin.register :redmine_git_remote do
   name 'Redmine Git Remote'
-  author 'Alex Dergachev'
+  author 'Marius Wagner'
   url 'https://github.com/heldbrendel/redmine_git_remote.git'
   description 'Automatically clone and fetch remote git repositories'
-  version '0.0.2'
+  version '0.1.0'
 
   settings :default => {
     'git_remote_repo_clone_path' => Pathname.new(__FILE__).join("../").realpath.to_s + "/repos",
