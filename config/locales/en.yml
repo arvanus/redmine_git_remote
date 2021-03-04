@@ -1,6 +1,7 @@
 en:
   field_extra_clone_url: Clone URL
   field_extra_clone_token: Access Token
+  field_extra_clone_username: Git Username
   text_git_remote_url_note: The URL to clone from.
   text_git_remote_path_note: The absolute filesystem path to clone to. Leave blank to auto-populate from URL.
   config:
