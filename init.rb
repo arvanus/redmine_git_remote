@@ -2,6 +2,7 @@ require 'redmine'
 require_dependency "redmine_git_remote/repositories_helper_patch"
 
 Redmine::Scm::Base.add "GitRemote"
+Redmine::Scm::Base.add "GitLab"
 
 Redmine::Plugin.register :redmine_git_remote do
   name 'Redmine Git Remote'
