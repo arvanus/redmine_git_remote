@@ -48,14 +48,8 @@ module RedmineGitRemote
                                       :disabled => !repository.safe_attribute?('url'),
                                       name: 'repository[extra_info][extra_clone_url]') +
 
-                      content_tag('em', l(:text_git_remote_url_note), :class => 'info') +
+                      content_tag('em', l(:text_git_remote_url_note), :class => 'info')) +
 
-                      form.text_field(:extra_clone_username,
-                                          :size => 60,
-                                          :required => true,
-                                          :disabled => !repository.safe_attribute?('url'),
-                                          name: 'repository[extra_info][extra_clone_username]'
-                      )) +
 
           content_tag('p',
                       form.password_field(:extra_clone_token,

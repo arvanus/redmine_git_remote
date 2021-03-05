@@ -28,17 +28,8 @@ class Repository::GitLab < Repository::Git
     extra_info["extra_clone_token"]
   end
 
-  def extra_clone_username
-    return nil unless extra_info
-    extra_info["username"]
-  end
-
   def clone_url
     self.extra_clone_url
-  end
-
-  def clone_username
-    self.extra_clone_username
   end
 
   def clone_token
@@ -114,9 +105,8 @@ class Repository::GitLab < Repository::Git
   def ensure_possibly_empty_clone_exists
 
     if clone_protocol_http?
-      url = extra_clone_url.to_s.split('://')[1]
-      git_url = "https://#{clone_username}:#{clone_token}@#{url}"
-      cmd = "git ls-remote -h #{git_url}"
+      extra_header_param = "http.extraHeader=\"Authorization: Basic #{Base64.strict_encode64(":" + extra_clone_token)}\""
+      cmd = "git -c #{extra_header_param} ls-remote -h #{clone_url}"
       unless system(cmd)
         return "#{clone_url} is not a valid remote."
       end
@@ -130,12 +120,15 @@ class Repository::GitLab < Repository::Git
 
     if Dir.exists?(clone_path)
       if clone_protocol_http?
+        extra_header_param = "http.extraHeader=\"Authorization: Basic #{Base64.strict_encode64(":" + extra_clone_token)}\""
+        cmd = "git -c #{extra_header_param} --git-dir #{clone_path} config --get remote.origin.url"
+        existing_repo_remote = `#{cmd}`; status = $?
+        extra_header_param = "http.extraHeader=\"Authorization: Basic #{Base64.strict_encode64(":" + extra_clone_token)}\""
+        cmd = "git -c #{extra_header_param} --git-dir #{clone_path} config --get remote.origin.url"
+        existing_repo_remote = `#{cmd}`; status = $?
+      else
         existing_repo_remote, status = RedmineGitRemote::PoorMansCapture3::capture2(
           "git", "--git-dir", clone_path, "config", "--get", "remote.origin.url")
-
-      else
-        cmd = "git --git-dir #{clone_path} config --get #{clone_username}:#{clone_token}@remote.origin.url"
-        existing_repo_remote = `#{cmd}`; status = $?
       end
       return "Unable to run: git --git-dir #{clone_path} config --get remote.origin.url" unless status.success?
 
@@ -148,9 +141,8 @@ class Repository::GitLab < Repository::Git
         return "Unable to run: git init --bare #{clone_path}"
       end
 
-      url = clone_url.to_s.split('://')[1]
-      git_url = "https://#{extra_clone_username}:#{extra_clone_token}@#{url}"
-      cmd = "git --git-dir #{clone_path} remote add --mirror=fetch origin #{git_url}"
+      extra_header_param = "http.extraHeader=\"Authorization: Basic #{Base64.strict_encode64(":" + extra_clone_token)}\""
+      cmd = "git -c #{extra_header_param} --git-dir #{clone_path} remote add --mirror=fetch origin #{clone_url}"
       unless system(cmd)
         return "Unable to run: git --git-dir #{clone_path} remote add --mirror=fetch origin #{clone_url}"
       end
@@ -192,38 +184,15 @@ class Repository::GitLab < Repository::Git
 
     # If dir exists and non-empty, should be safe to 'git fetch'
     if clone_protocol_http?
-      unless system "git", "--git-dir", clone_path, "fetch", "--all"
-        Rails.logger.warn "Unable to run 'git -c #{clone_path} fetch --all'"
-      end
-    else
-      cmd = "git --git-dir #{clone_path} fetch --all"
+      extra_header_param = "http.extraHeader=\"Authorization: Basic #{Base64.strict_encode64(":" + extra_clone_token)}\""
+      cmd = "git -c #{extra_header_param} --git-dir #{clone_path} fetch --all"
       unless system(cmd)
         Rails.logger.warn "Unable to run 'git -c #{clone_path} fetch --all'"
       end
-    end
-  end
-
-  # Checks if host is in ~/.ssh/known_hosts, adds it if not present
-=begin
-  def self.add_known_host(host)
-    # if not found...
-    out, status = RedmineGitRemote::PoorMansCapture3::capture2("ssh-keygen", "-F", host)
-    raise "Unable to run 'ssh-keygen -F #{host}" unless status
-    unless out.match /found/
-      # hack to work with 'docker exec' where HOME isn't set (or set to /)
-      ssh_dir = (ENV['HOME'] == "/" || ENV['HOME'] == nil ? "/root" : ENV['HOME']) + "/.ssh"
-      ssh_known_hosts = ssh_dir + "/known_hosts"
-      begin
-        FileUtils.mkdir_p ssh_dir
-      rescue Exception => e
-        raise "Unable to create directory #{ssh_dir}: " + e.to_s
+    else
+      unless system "git", "--git-dir", clone_path, "fetch", "--all"
+        Rails.logger.warn "Unable to run 'git -c #{clone_path} fetch --all'"
       end
-
-      puts "Adding #{host} to #{ssh_known_hosts}"
-      out, status = RedmineGitRemote::PoorMansCapture3::capture2("ssh-keyscan", host)
-      raise "Unable to run 'ssh-keyscan #{host}'" unless status
-      Kernel::open(ssh_known_hosts, 'a') { |f| f.puts out }
     end
   end
-=end
 end
